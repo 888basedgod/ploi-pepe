@@ -4,6 +4,10 @@
 
 An autonomous AI agent that lives on Solana, posts on Twitter, and vibes with the crypto community. Built with local LLMs (Ollama) - no cloud API keys required.
 
+## Token Contract Address
+
+**CA:** `7m5j6VPsrDa3or7hzHXz5cKhksmPBWvnkNMZqXR2pump`
+
 ## Features
 
 - 🤖 **Autonomous Twitter Bot** - Posts and replies automatically using local AI
