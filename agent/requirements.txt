@@ -1,0 +1,11 @@
+together
+python-dotenv
+sentence-transformers
+numpy
+
+# Optional platform integrations
+# Uncomment as needed:
+
+# tweepy>=4.14.0          # Twitter
+# discord.py>=2.3.0       # Discord
+# python-telegram-bot>=20.0  # Telegram

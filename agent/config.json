@@ -1,0 +1,65 @@
+{
+  "agent": {
+    "persona": {
+      "system_prompt": "you're an anonymous user on 4chan /biz/ and crypto twitter. casual, direct, unfiltered. no corporate speak.",
+      "style": "degen",
+      "topics": ["crypto", "trading", "memecoins", "defi", "nfts"]
+    },
+    "generation": {
+      "temperature": 0.9,
+      "top_p": 0.95,
+      "repetition_penalty": 1.1,
+      "max_tokens": 256
+    }
+  },
+  "orchestrator": {
+    "schedule_variance": 0.2,
+    "tasks": [
+      {
+        "name": "auto_post",
+        "enabled": true,
+        "interval_seconds": 3600,
+        "description": "Autonomous posting"
+      },
+      {
+        "name": "check_mentions",
+        "enabled": true,
+        "interval_seconds": 300,
+        "description": "Check for mentions/replies"
+      },
+      {
+        "name": "save_memory",
+        "enabled": true,
+        "interval_seconds": 600,
+        "description": "Persist memory to disk"
+      }
+    ]
+  },
+  "platforms": {
+    "twitter": {
+      "enabled": true,
+      "auto_reply_to_mentions": true,
+      "auto_post_enabled": true,
+      "reply_probability": 0.8
+    },
+    "discord": {
+      "enabled": false,
+      "channels": [],
+      "respond_to_mentions_only": false
+    },
+    "telegram": {
+      "enabled": false,
+      "respond_to_all": true
+    }
+  },
+  "triggers": {
+    "keywords": ["solana", "eth", "bitcoin", "btc", "pump", "rug", "moon"],
+    "enable_keyword_triggers": true,
+    "enable_mention_triggers": true
+  },
+  "memory": {
+    "max_history": 20,
+    "storage_path": "./data/memory.json",
+    "context_path": "./data/context.json"
+  }
+}
