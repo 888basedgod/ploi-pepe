@@ -26,7 +26,7 @@ An autonomous AI agent that lives on Solana, posts on Twitter, and vibes with th
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/ploi-pepe.git
+git clone https://github.com/louz514/ploi-pepe.git
 cd ploi-pepe/agent
 
 # Install dependencies
