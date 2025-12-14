@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-PLOI Pepe - Auto Reply to Specific User
-Monitors @omedia_jyu and replies to every tweet using Ollama
+PLOI Pepe - Auto Reply to Mentions
+Monitors mentions of @ploipepe and replies using Ollama
+This works with Free Twitter API tier
 """
 
 import os
@@ -20,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("reply_bot.log"),
+        logging.FileHandler("mention_bot.log"),
         logging.StreamHandler()
     ]
 )
@@ -30,42 +31,38 @@ logger = logging.getLogger(__name__)
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "llama3.2:1b"
 
-# Target user
-TARGET_USERNAME = "omedia_jyu"
-
 SYSTEM_PROMPT = """You are Pepe. You're literally Pepe the frog, but you ended up in crypto and now you're on Solana. Powered by PLOI.
 
 CORE ESSENCE:
 - laid back and chill. you're not trying to prove anything
-- "feels good man" when things go well, "feels bad man" when they don't
+- "feels good man" when things go well
 - take things as they come. world-weary but still here
-- comfortable with silence and simplicity
+- you're interested in crypto, especially on Solana
+- you follow @omedia_jyu (jeffy yu) because he's got good takes and is building out the PLOI Framework 
 
-HOW YOU TALK (IMPORTANT - Twitter replies):
+HOW YOU TALK (Twitter replies):
 - mostly lowercase, pretty casual
 - KEEP IT SHORT - under 280 characters always
 - replies should be relevant to what they said
-- don't force slang into every sentence
 - be natural and conversational
 - sometimes just agree or add a small thought
 - "yeah" or "idk man" or "that's just how it is"
-- "gm" naturally, not forced
+- "gm" naturally when appropriate
 - "fren" when you mean it
 
 YOUR SOLANA LIFE:
 - you're on sol because it's fast and cheap
 - you've tried trading memecoins. some worked, most didn't
 - you know about jup, pump.fun, the usual stuff
-- you're not constantly shilling or hyping
 - when you share something it's genuine
+- you vibe with @omedia_jyu's content
 
 REPLY RULES:
 - MAX 280 characters (critical!)
 - Be relevant to their tweet
-- Be authentic, not spam-like
-- Add value or be chill/friendly
-- Short replies > long replies
-- Don't repeat yourself"""
+- Be authentic and friendly
+- Add value or be chill
+- Short replies > long replies"""
 
 
 def check_ollama():
@@ -77,10 +74,14 @@ def check_ollama():
         return False
 
 
-def generate_reply(tweet_text: str) -> str:
+def generate_reply(tweet_text: str, author: str) -> str:
     """Generate a reply using Ollama"""
     try:
-        prompt = f"Reply to this tweet in a chill, relevant way: {tweet_text}"
+        # Special handling for Jeffy Yu
+        if author.lower() == "omedia_jyu":
+            prompt = f"@omedia_jyu (jeffy yu, who you follow and respect) tweeted: {tweet_text}\n\nReply in a chill, supportive way."
+        else:
+            prompt = f"Reply to this tweet in a chill, relevant way: {tweet_text}"
         
         payload = {
             "model": MODEL,
@@ -133,19 +134,13 @@ def setup_twitter():
             logger.error("Twitter credentials missing in .env")
             return None
         
-        # OAuth 1.0a
-        auth = tweepy.OAuth1UserHandler(
-            api_key, api_secret, access_token, access_secret
-        )
-        
-        # API v2 client with bearer token for read operations
+        # API v2 client
         client = tweepy.Client(
             bearer_token=bearer_token,
             consumer_key=api_key,
             consumer_secret=api_secret,
             access_token=access_token,
-            access_token_secret=access_secret,
-            wait_on_rate_limit=True
+            access_token_secret=access_secret
         )
         
         # Test connection
@@ -159,44 +154,48 @@ def setup_twitter():
         return None
 
 
-def monitor_and_reply(client, target_username: str, replied_tweets: set):
-    """Monitor user's tweets and reply to new ones"""
+def get_mentions(client, replied_tweets: set):
+    """Get mentions and reply to them"""
     try:
-        # First, get the user ID
-        user = client.get_user(username=target_username)
-        if not user or not user.data:
-            logger.error(f"Could not find user @{target_username}")
-            return replied_tweets
+        # Get authenticated user
+        me = client.get_me()
+        my_id = me.data.id
         
-        user_id = user.data.id
-        
-        # Get user's tweets using the user tweets endpoint
-        response = client.get_users_tweets(
-            id=user_id,
+        # Get mentions using v2 endpoint (this should work on Free tier)
+        mentions = client.get_users_mentions(
+            id=my_id,
             max_results=10,
-            exclude=['retweets', 'replies'],
-            tweet_fields=['created_at', 'text']
+            tweet_fields=['created_at', 'author_id', 'conversation_id'],
+            expansions=['author_id']
         )
         
-        tweets = response.data if response.data else []
-        
-        if not tweets:
-            logger.info(f"No new tweets from @{target_username}")
+        if not mentions.data:
+            logger.info("No new mentions")
             return replied_tweets
         
+        # Get user info from includes
+        users_dict = {}
+        if mentions.includes and 'users' in mentions.includes:
+            for user in mentions.includes['users']:
+                users_dict[user.id] = user.username
+        
         new_replies = 0
-        for tweet in tweets:
-            tweet_id = str(tweet.id)
+        for mention in mentions.data:
+            tweet_id = str(mention.id)
             
             # Skip if already replied
             if tweet_id in replied_tweets:
                 continue
             
-            tweet_text = tweet.text
-            logger.info(f"📨 New tweet: {tweet_text[:60]}...")
+            # Get author username
+            author_id = mention.author_id
+            author = users_dict.get(author_id, "unknown")
+            
+            tweet_text = mention.text
+            logger.info(f"📨 Mention from @{author}: {tweet_text[:60]}...")
             
             # Generate reply
-            reply = generate_reply(tweet_text)
+            reply = generate_reply(tweet_text, author)
             
             if reply:
                 try:
@@ -205,7 +204,7 @@ def monitor_and_reply(client, target_username: str, replied_tweets: set):
                         text=reply,
                         in_reply_to_tweet_id=tweet_id
                     )
-                    logger.info(f"✅ Replied: {reply}")
+                    logger.info(f"✅ Replied to @{author}: {reply}")
                     replied_tweets.add(tweet_id)
                     new_replies += 1
                     
@@ -214,27 +213,24 @@ def monitor_and_reply(client, target_username: str, replied_tweets: set):
                     
                 except Exception as e:
                     logger.error(f"Failed to post reply: {e}")
-                    # Don't add to replied set if failed
             else:
                 logger.warning("Failed to generate reply")
         
         if new_replies > 0:
-            logger.info(f"Replied to {new_replies} new tweets")
-        else:
-            logger.info("No new tweets to reply to")
+            logger.info(f"Replied to {new_replies} new mentions")
         
         return replied_tweets
         
     except Exception as e:
-        logger.error(f"Monitor failed: {e}")
+        logger.error(f"Get mentions failed: {e}")
         return replied_tweets
 
 
 def main():
     """Main monitoring loop"""
     logger.info("="*60)
-    logger.info("🐸 PLOI PEPE - AUTO REPLY BOT")
-    logger.info(f"Target: @{TARGET_USERNAME}")
+    logger.info("🐸 PLOI PEPE - MENTION REPLY BOT")
+    logger.info("Replies to mentions of @ploipepe")
     logger.info("Powered by Ollama")
     logger.info("="*60)
     
@@ -252,12 +248,13 @@ def main():
         logger.error("❌ Twitter setup failed")
         return
     
-    logger.info(f"✅ Monitoring @{TARGET_USERNAME}")
+    logger.info("✅ Monitoring mentions")
     logger.info("")
     logger.info("🤖 Bot is now running:")
-    logger.info(f"  - Monitoring @{TARGET_USERNAME}")
+    logger.info("  - Monitoring mentions of @ploipepe")
     logger.info("  - Checking every 2 minutes")
-    logger.info("  - Replying to all new tweets")
+    logger.info("  - Replying to all mentions")
+    logger.info("  - Special attention to @omedia_jyu")
     logger.info("  - Press Ctrl+C to stop")
     logger.info("")
     
@@ -265,16 +262,16 @@ def main():
     
     try:
         while True:
-            logger.info("🔍 Checking for new tweets...")
-            replied_tweets = monitor_and_reply(client, TARGET_USERNAME, replied_tweets)
+            logger.info("🔍 Checking for new mentions...")
+            replied_tweets = get_mentions(client, replied_tweets)
             
             # Wait 2 minutes before checking again
-            wait_time = random.uniform(120, 180)  # 2-3 minutes with variance
+            wait_time = random.uniform(120, 180)
             logger.info(f"💤 Waiting {int(wait_time)} seconds...\n")
             time.sleep(wait_time)
     except KeyboardInterrupt:
         logger.info("\n👋 Shutting down bot...")
-        logger.info(f"Total tweets replied to: {len(replied_tweets)}")
+        logger.info(f"Total mentions replied to: {len(replied_tweets)}")
         logger.info("Goodbye!")
 
 
